@@ -65,7 +65,8 @@
             writeToScreen("DISCONNECTED");
         }
         function onMessage(evt) {
-            writeToScreen('<span style="color: blue;">RESPONSE: ' + evt.data + '</span>');
+	     if (evt.data!='{"method":"breathe"}'){	
+            writeToScreen('<span style="color: blue;">RESPONSE: ' + evt.data + '</span>');}
         }
         function onError(evt) {
             writeToScreen('<span style="color: red;">ERROR:</span> ' + evt.data);

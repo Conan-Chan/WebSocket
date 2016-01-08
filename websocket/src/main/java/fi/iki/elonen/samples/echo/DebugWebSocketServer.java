@@ -35,6 +35,7 @@ package fi.iki.elonen.samples.echo;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.io.StringWriter;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -100,25 +101,44 @@ public class DebugWebSocketServer extends NanoWSD {
                 amsg = jsonReader.readObject();
                 // dealing with messages
                 String method = amsg.getString("method");
-                String smsg=null;
+                JsonObjectBuilder rel = Json.createObjectBuilder();
+                String smsg;
+
+                if (!method.equals("breathe")) {
+                    System.out.println("[REQUEST] " + textmsg);
+                }
+
                 if (method.contains("User")) {
-                	smsg = dealWithUser(method);
+                     rel = dealWithUser(amsg);
+                } else if (method.contains("Model")) {
+                    rel = dealWithModel(amsg);
+                } else if (method.contains("Property")) {
+                    rel = dealWithProperty(amsg);
+                    } else if (method.contains("Task")) {
+                        rel = dealWithTask(amsg);
+                        } else {
+                    // FIXME
+                    rel = dealWithOthers(amsg);
                 }
-                else if (method.contains("Model")){
-                	smsg  = dealWithModel(method);
-                }
-                else if (method.contains("Property")){
-                	smsg  = dealWithProperty(method);
-                }
-                else if (method.contains("Task")){
-                	smsg  = dealWithTask(method);
-                }
-                else 
-                	smsg  = dealWithOthers(method);
-                if ( smsg != null ) {
-                	message.setTextPayload(smsg);
-                	sendFrame(message);
-                    System.out.println(textmsg);
+
+                // FIXME before the message was sent, where's something to do
+                if (amsg.getString("msgid", "empty") != "empty")
+               {rel.add("msgid", amsg.getString("msgid"));}
+                // FIXME how to generate the response String from a
+                // JsonObjectBuilder
+                // manually generation of json string may lead to lots of
+                // literal errors
+                // using a jsonwriter could be much more efficient
+                StringWriter sw = new StringWriter();
+                JsonWriter jwriter = Json.createWriter(sw);
+                jwriter.write(rel.build());
+                smsg = sw.toString();
+                if (smsg != null) {
+                    message.setTextPayload(smsg);
+                    sendFrame(message);
+                    if (!method.equals("breathe")) {
+                        System.out.println("[RESPONSE]" + smsg);
+                    }
                 }
                 // ignore repeating "breathe" message
             } catch (IOException e) {
@@ -126,99 +146,151 @@ public class DebugWebSocketServer extends NanoWSD {
             }
         }
 
-        protected String dealWithUser (String method)
-        {
-        	String smsg = null;
+        // FIXME I strongly suggest that these functions should be realized AS
+        // JsonObject -> JsonObjectBuilder
+        protected JsonObjectBuilder dealWithOthers(JsonObject msg) {
+            JsonObjectBuilder rel = Json.createObjectBuilder();
+            String method = msg.getString("method");
+            if (method.equals("login")) {
+                rel.add("method", "provideSession");
+                rel.add("status", "true");
+                rel.add("session", "101");
+            }
+            	else if (method.equals("requestID")){
+            	rel.add("method", "provideID")
+            	.add("ID", "123");
+            }         
+            // to keep active of the websocket
+            else if (method.equals("breathe")) {
+                // FIXME
+                rel.add("method", "breathe");
+            }else {
+                rel.add("method", "unhandled");
+            }
+            return rel;
+        }
+
+
+        protected JsonObjectBuilder dealWithUser(JsonObject msg) {
+            JsonObjectBuilder rel = Json.createObjectBuilder();
+            String method = msg.getString("method");
             if (method.equals("createUser")) {
-            	smsg="{\"method\" : \"answerCreateUser\",\"status\" : false|true,\"message\" :<why failed|empty string>}";
-            } 
-            else if (method.equals("saveUser")){
-               	smsg="{\"method\" : \"answerSaveUser\",\"status\" : false|true,\"message\" :<why failed|empty string>}";
-                } 
-            else if (method.equals("listUser")){
-               	smsg="{\"method\" : \"provideListUser\",\"status\" : false|true,\"message\" :<why failed|empty string>\"desc\" : [{ \"id\" :\"id\", ... /* all fields */ },...]}";
-                } 
-            else if (method.equals("requireUser")){
-               	smsg="{\"method\" : \"provideUser\",\"status\" : false|true,\"message\" :<why failed|empty string>\"desc\" : [{ \"id\" :\"id\", ... /* all fields */ },...]}";
-                } 
-            else smsg="{\"method\" : \"answerRemoveUser\",\"status\" : false|true,\"message\" :<why failed|empty string>}";
-            return smsg;     
+            	rel.add("method", "answerCreateUser")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("saveUser")) {
+            	rel.add("method", "answerSaveUser")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("listUser")) {
+            	rel.add("method", "provideListUser")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("requireUser")) {
+            	//just an example
+            	JsonObject user = Json.createObjectBuilder().add("id", 1)
+            			.add("username","Joe").build();
+            	rel.add("method", "provideUser")
+            	.add("status", true)
+            	.add("message", "strings")
+            	.add("desc", user);
+            } else
+            	rel.add("method", "answerRemoveUser")
+            	.add("status", true)
+            	.add("message", "strings");
+            return rel;
         }
-        
-        protected String dealWithModel(String method)
-        {
-        	String smsg = null;
+
+        protected JsonObjectBuilder dealWithModel(JsonObject msg) {
+            JsonObjectBuilder rel = Json.createObjectBuilder();
+            String method = msg.getString("method");
             if (method.equals("createModel")) {
-            	smsg="{\"method\" : \"answerCreateModel\",\"status\" : false|true,\"message\" :<why failed|empty string>,\"id\" : <id>}";
-            } 
-            else if (method.equals("saveModel")){
-               	smsg="{\"method\" : \"answerSaveModel\",\"status\" : false|true,\"message\" :<why failed|empty string>}";
-                } 
-            else if (method.equals("listModel")){
-               	smsg="{\"method\" : \"provideListModel\",\"status\" : false|true,\"message\" :<why failed|empty string>\"desc\" : [{ \"id\" :\"id\", ... /* all fields */ },...]}";
-                } 
-            else if (method.equals("requireModel")){
-               	smsg="{\"method\" : \"provideModel\",\"status\" : false|true,\"message\" :<why failed|empty string>\"desc\" : [{ \"id\" :\"id\", ... /* all fields */ },...]}";
-                } 
-            else smsg="{\"method\" : \"answerRemoveModel\",\"status\" : false|true,\"message\" :<why failed|empty string>}";
-            return smsg;     
+            	rel.add("method", "answerCreateModel")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("saveModel")) {
+            	rel.add("method", "answerSaveModel")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("listModel")) {
+            	rel.add("method", "provideListModel")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("requireModel")) {
+            	//just an example
+            	JsonObject Model = Json.createObjectBuilder().add("id", 1)
+            			.add("Modelname","LTL").build();
+            	rel.add("method", "provideModel")
+            	.add("status", true)
+            	.add("message", "strings")
+            	.add("desc", Model);
+            } else
+            	rel.add("method", "answerRemoveModel")
+            	.add("status", true)
+            	.add("message", "strings");
+            return rel;
         }
-        
-        protected String dealWithProperty(String method)
-        {
-        	String smsg = null;
+
+        protected JsonObjectBuilder dealWithProperty(JsonObject msg) {
+            JsonObjectBuilder rel = Json.createObjectBuilder();
+            String method = msg.getString("method");
             if (method.equals("createProperty")) {
-            	smsg="{\"method\" : \"answerCreateProperty\",\"status\" : false|true,\"message\" :<why failed|empty string>,\"id\" : <id>}";
-            } 
-            else if (method.equals("saveProperty")){
-               	smsg="{\"method\" : \"answerSaveProperty\",\"status\" : false|true,\"message\" :<why failed|empty string>}";
-                } 
-            else if (method.equals("listProperty")){
-               	smsg="{\"method\" : \"provideListProperty\",\"status\" : false|true,\"message\" :<why failed|empty string>\"desc\" : [{ \"id\" :\"id\", ... /* all fields */ },...]}";
-                } 
-            else if (method.equals("requireProperty")){
-               	smsg="{\"method\" : \"provideProperty\",\"status\" : false|true,\"message\" :<why failed|empty string>\"desc\" : [{ \"id\" :\"id\", ... /* all fields */ },...]}";
-                } 
-            else smsg="{\"method\" : \"answerRemoveProperty\",\"status\" : false|true,\"message\" :<why failed|empty string>}";
-            return smsg;     
+            	rel.add("method", "answerCreateProperty")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("saveProperty")) {
+            	rel.add("method", "answerSaveProperty")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("listProperty")) {
+            	rel.add("method", "provideListProperty")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("requireProperty")) {
+            	//just an example
+            	JsonObject Property = Json.createObjectBuilder().add("id", 1)
+            			.add("Propertyname","Safety").build();
+            	rel.add("method", "provideProperty")
+            	.add("status", true)
+            	.add("message", "strings")
+            	.add("desc", Property);
+            } else
+            	rel.add("method", "answerRemoveProperty")
+            	.add("status", true)
+            	.add("message", "strings");
+            return rel;
         }
-        
-        protected String dealWithTask(String method)
-        {
-        	String smsg = null;
+
+        protected JsonObjectBuilder dealWithTask(JsonObject msg) {
+            JsonObjectBuilder rel = Json.createObjectBuilder();
+            String method = msg.getString("method");
             if (method.equals("createTask")) {
-            	smsg="{\"method\" : \"answerCreateTask\",\"status\" : false|true,\"message\" :<why failed|empty string>,\"id\" : <id>}";
-            } 
-            else if (method.equals("listTask")){
-               	smsg="{\"method\" : \"provideListTask\",\"status\" : false|true,\"message\" :<why failed|empty string>\"desc\" : [{ \"id\" :\"id\", ... /* all fields */ },...]}";
-                } 
-            else if (method.equals("requireTask")){
-               	smsg="{\"method\" : \"provideTask\",\"status\" : false|true,\"message\" :<why failed|empty string>\"desc\" : [{ \"id\" :\"id\", ... /* all fields */ },...]}";
-                } 
-            else smsg="{\"method\" : \"answerRemoveTask\",\"status\" : false|true,\"message\" :<why failed|empty string>}";
-            return smsg;     
+            	rel.add("method", "answerCreateTask")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("saveTask")) {
+            	rel.add("method", "answerSaveTask")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("listTask")) {
+            	rel.add("method", "provideListTask")
+            	.add("status", true)
+            	.add("message", "strings");
+            } else if (method.equals("requireTask")) {
+            	//just an example
+            	JsonObject Task = Json.createObjectBuilder().add("id", 1)
+            			.add("Taskname","Task").build();
+            	rel.add("method", "provideTask")
+            	.add("status", true)
+            	.add("message", "strings")
+            	.add("desc", Task);
+            } else
+            	rel.add("method", "answerRemoveTask")
+            	.add("status", true)
+            	.add("message", "strings");
+            return rel;
         }
-  
-        protected String dealWithOthers (String method){
-        	String smsg = null;
-        	if (method.equals("login"))
-        	{
-               	smsg="{\"method\" : \"provideSession\",\"status\" : false|true,\"message\" :<why failed|empty string>\"desc\" : [{ \"id\" :\"id\", ... /* all fields */ },...], \"session\":<session>}";       		
-        	}
-        	else if (method.equals(	"renewsession"))
-        	{
-        		smsg="{provideSession}";
-        	}
-        	// to keep active of the websocket
-        	else if (method.equals("breathe") )
-        	{
-        		smsg=null;
-        	}
-        	else 
-        		{smsg="unknown method: " + method;}
-        	return smsg;
-        }
-        
+
         @Override
         protected void onPong(WebSocketFrame pong) {
             if (server.debug) {
